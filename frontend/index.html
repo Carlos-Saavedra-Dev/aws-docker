@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Gestor de Productos</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="container">
+        <h1>Catálogo de Productos</h1>
+        <p class="subtitle">Gestiona tus productos</p>
+
+        <form id="productForm" class="card">
+            <h2 id="formTitle">Nuevo producto</h2>
+            <input type="hidden" id="productId">
+            <input type="text" id="name" placeholder="Nombre" maxlength="100" required>
+            <input type="number" id="price" placeholder="Precio ($)" min="0.01" step="0.01" required>
+            <div class="actions">
+                <button type="submit" id="submitBtn" class="btn btn-primary">Agregar</button>
+                <button type="button" id="cancelBtn" class="btn btn-ghost" hidden>Cancelar</button>
+            </div>
+        </form>
+
+        <ul id="productList" class="list"></ul>
+        <p id="empty" class="empty" hidden>Aún no hay productos.</p>
+    </main>
+
+    <script src="config.js"></script>
+    <script>
+        const API = window.API_BASE || ''
+        const form = document.getElementById('productForm')
+        const idInput = document.getElementById('productId')
+        const nameInput = document.getElementById('name')
+        const priceInput = document.getElementById('price')
+        const list = document.getElementById('productList')
+        const empty = document.getElementById('empty')
+        const formTitle = document.getElementById('formTitle')
+        const submitBtn = document.getElementById('submitBtn')
+        const cancelBtn = document.getElementById('cancelBtn')
+
+        let products = []
+
+        const esc = (s) => String(s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[c]))
+
+        async function fetchProducts() {
+            try {
+                const res = await fetch(`${API}/api/products`)
+                if (!res.ok) throw new Error(res.status)
+                products = await res.json()
+            } catch (err) {
+                console.error('No se pudo cargar productos', err)
+                products = []
+            }
+            render()
+        }
+
+        function render() {
+            empty.hidden = products.length > 0
+            list.innerHTML = products.map(p => `
+                <li class="item">
+                    <div class="info">
+                        <strong>${esc(p.name)}</strong>
+                        <span class="price">$ ${esc(Number(p.price).toLocaleString('es-CO'))}</span>
+                    </div>
+                    <div class="item-actions">
+                        <button class="btn btn-small btn-edit" data-edit="${p.id}">Editar</button>
+                        <button class="btn btn-small btn-delete" data-delete="${p.id}">Eliminar</button>
+                    </div>
+                </li>
+            `).join('')
+        }
+
+        function resetForm() {
+            form.reset()
+            idInput.value = ''
+            formTitle.textContent = 'Nuevo producto'
+            submitBtn.textContent = 'Agregar'
+            cancelBtn.hidden = true
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault()
+            const body = JSON.stringify({ name: nameInput.value, price: priceInput.value })
+            const id = idInput.value
+            const url = id ? `${API}/api/products/${id}` : `${API}/api/products`
+            const method = id ? 'PUT' : 'POST'
+
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body
+            })
+            if (!res.ok) {
+                alert('No se pudo guardar el producto')
+                return
+            }
+            resetForm()
+            fetchProducts()
+        })
+
+        list.addEventListener('click', async (e) => {
+            const editId = e.target.dataset.edit
+            const delId = e.target.dataset.delete
+
+            if (editId) {
+                const p = products.find(x => x.id == editId)
+                if (!p) return
+                idInput.value = p.id
+                nameInput.value = p.name
+                priceInput.value = p.price
+                formTitle.textContent = 'Editar producto'
+                submitBtn.textContent = 'Guardar cambios'
+                cancelBtn.hidden = false
+                nameInput.focus()
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+
+            if (delId) {
+                if (!confirm('¿Eliminar este producto?')) return
+                const res = await fetch(`${API}/api/products/${delId}`, { method: 'DELETE' })
+                if (!res.ok) {
+                    alert('No se pudo eliminar el producto')
+                    return
+                }
+                if (idInput.value == delId) resetForm()
+                fetchProducts()
+            }
+        })
+
+        cancelBtn.addEventListener('click', resetForm)
+
+        fetchProducts()
+    </script>
+</body>
+</html>
